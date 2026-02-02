@@ -35,9 +35,12 @@ class SimulatedRobot(RobotInterface):
         self.joint_indices: list[int] = []
 
         # Control parameters
-        self.max_force = 10.0
-        self.position_gain = 0.3
+        self.max_force = 50.0
+        self.position_gain = 0.8
         self.velocity_gain = 1.0
+
+        # Real-time stepping: accumulate wall-clock time and step physics to match
+        self._last_step_time: float | None = None
 
     def connect(self) -> bool:
         try:
@@ -128,8 +131,20 @@ class SimulatedRobot(RobotInterface):
             self.step()
 
     def step(self):
-        """Advance simulation by one timestep."""
-        p.stepSimulation()
+        """Advance simulation to match wall-clock time."""
+        now = time.time()
+        if self._last_step_time is None:
+            self._last_step_time = now
+            p.stepSimulation()
+            return
+
+        elapsed = now - self._last_step_time
+        # Cap at 50ms to avoid spiral-of-death when the app hitches
+        elapsed = min(elapsed, 0.05)
+        steps = int(elapsed / self.timestep)
+        for _ in range(max(steps, 1)):
+            p.stepSimulation()
+        self._last_step_time = now
 
     def is_connected(self) -> bool:
         return self.client is not None and p.isConnected(self.client)

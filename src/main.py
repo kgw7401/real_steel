@@ -10,14 +10,13 @@ import time
 
 import cv2
 import numpy as np
-import pybullet as pb
 import yaml
 
 from src.angle_calculator import AngleCalculator
 from src.camera import Camera
 from src.motion_mapper import MappingConfig, MotionMapper
 from src.pose_estimator import PoseEstimator
-from src.simulated_robot import SimulatedRobot
+from src.profiler import PipelineProfiler
 
 
 def load_config(path: str) -> dict:
@@ -87,16 +86,36 @@ def main():
     )
     motion_mapper = MotionMapper(config=mapping_config)
 
+    # Pipeline profiler
+    profiler = PipelineProfiler(
+        stages=["camera", "pose", "angles", "mapping", "robot"],
+        report_interval=5.0,
+    )
+
     # Robot setup
     robot = None
+    use_sim = False
     if args.sim:
+        from src.simulated_robot import SimulatedRobot
         sim_cfg = cfg.get("simulation", {})
         urdf_path = sim_cfg.get("urdf_path", "urdf/real_steel.urdf")
         robot = SimulatedRobot(urdf_path=urdf_path, gui=True)
         if not robot.connect():
             print("Failed to connect to simulation")
             sys.exit(1)
+        use_sim = True
         print("Simulation connected")
+    elif args.port or cfg.get("serial", {}).get("port"):
+        from src.real_robot import RealRobot
+        port = args.port or cfg["serial"]["port"]
+        baud = cfg.get("serial", {}).get("baud", 115200)
+        robot = RealRobot(port=port, baud=baud)
+        if not robot.connect():
+            print(f"Failed to connect to ESP32 on {port}")
+            sys.exit(1)
+    else:
+        print("Specify --sim or --port")
+        sys.exit(1)
 
     # Open camera
     if not camera.open():
@@ -107,7 +126,8 @@ def main():
     print("Camera opened")
 
     # PyBullet camera state for keyboard control
-    if args.sim:
+    if use_sim:
+        import pybullet as pb
         cam_info = pb.getDebugVisualizerCamera()
         cam_dist = cam_info[10]
         cam_yaw = cam_info[8]
@@ -123,30 +143,48 @@ def main():
     frame_num = 0
 
     print("Running pipeline. Press 'q' or ESC to quit.")
-    print("PyBullet camera: arrow keys to rotate, +/- to zoom")
-    print()
+    if use_sim:
+        print("PyBullet camera: arrow keys to rotate, +/- to zoom")
     print("Joint order: [L_roll, L_tilt, L_pan, L_elbow, R_roll, R_tilt, R_pan, R_elbow]")
 
     try:
         while True:
-            frame = camera.read()
-            if frame is None:
+            profiler.start("camera")
+            frame, is_new_frame = camera.read()
+            profiler.stop("camera")
+
+            if frame is None or not is_new_frame:
+                # No new frame — keep sim stepping but skip processing
+                if use_sim and robot is not None:
+                    robot.step()
                 continue
 
+            profiler.tick()
+
             # Pose estimation
+            profiler.start("pose")
             pose = pose_estimator.process(frame.image, frame.timestamp)
+            profiler.stop("pose")
 
             # Angle calculation
+            profiler.start("angles")
             joint_angles = angle_calculator.calculate(pose)
+            profiler.stop("angles")
 
             # Motion mapping and robot command
             servo_angles = None
+            profiler.start("mapping")
             if joint_angles is not None and robot is not None:
                 servo_angles = motion_mapper.map(joint_angles)
+            profiler.stop("mapping")
+
+            profiler.start("robot")
+            if servo_angles is not None and robot is not None:
                 robot.set_joint_positions(servo_angles.angles)
+            profiler.stop("robot")
 
             # Step simulation + keyboard camera control
-            if args.sim and robot is not None:
+            if use_sim and robot is not None:
                 robot.step()
 
                 keys = pb.getKeyboardEvents()
@@ -191,9 +229,13 @@ def main():
                 elapsed = time.time() - fps_timer
                 if elapsed >= 5.0:
                     current_fps = fps_counter / elapsed
-                    print(f"FPS: {current_fps:.1f}")
                     fps_counter = 0
                     fps_timer = time.time()
+
+                # Profiler report (prints every report_interval)
+                report = profiler.report()
+                if report:
+                    print(report)
 
                 # Draw FPS on frame
                 cv2.putText(

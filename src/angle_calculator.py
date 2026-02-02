@@ -47,6 +47,12 @@ class AngleCalculator:
     # Pan is linearly attenuated to 0 below this ratio.
     PAN_HORIZ_THRESHOLD = 0.3
 
+    KEYPOINT_ORDER = [
+        "left_shoulder", "right_shoulder",
+        "left_elbow", "right_elbow",
+        "left_wrist", "right_wrist",
+    ]
+
     def __init__(self, smoothing_factor: float = 0.3):
         self.smoothing_factor = smoothing_factor
         self.prev_angles: JointAngles | None = None
@@ -55,12 +61,11 @@ class AngleCalculator:
         if not pose.is_valid:
             return None
 
-        ls = self._to_world_vec(pose.keypoints["left_shoulder"])
-        le = self._to_world_vec(pose.keypoints["left_elbow"])
-        lw = self._to_world_vec(pose.keypoints["left_wrist"])
-        rs = self._to_world_vec(pose.keypoints["right_shoulder"])
-        re = self._to_world_vec(pose.keypoints["right_elbow"])
-        rw = self._to_world_vec(pose.keypoints["right_wrist"])
+        pts = np.array([
+            [p.world_x, p.world_y, p.world_z]
+            for p in (pose.keypoints[k] for k in self.KEYPOINT_ORDER)
+        ])
+        ls, rs, le, re, lw, rw = pts[0], pts[1], pts[2], pts[3], pts[4], pts[5]
 
         angles = JointAngles(
             left_shoulder_roll=self._calc_shoulder_roll(ls, le, rs),
@@ -196,17 +201,11 @@ class AngleCalculator:
 
     def _smooth(self, current: JointAngles, previous: JointAngles) -> JointAngles:
         alpha = self.smoothing_factor
-        def ema(prev, cur):
-            return alpha * prev + (1 - alpha) * cur
+        cur = current.to_array()
+        prev = previous.to_array()
+        smoothed = alpha * prev + (1 - alpha) * cur
         return JointAngles(
-            left_shoulder_roll=ema(previous.left_shoulder_roll, current.left_shoulder_roll),
-            left_shoulder_tilt=ema(previous.left_shoulder_tilt, current.left_shoulder_tilt),
-            left_shoulder_pan=ema(previous.left_shoulder_pan, current.left_shoulder_pan),
-            left_elbow=ema(previous.left_elbow, current.left_elbow),
-            right_shoulder_roll=ema(previous.right_shoulder_roll, current.right_shoulder_roll),
-            right_shoulder_tilt=ema(previous.right_shoulder_tilt, current.right_shoulder_tilt),
-            right_shoulder_pan=ema(previous.right_shoulder_pan, current.right_shoulder_pan),
-            right_elbow=ema(previous.right_elbow, current.right_elbow),
+            *smoothed,
             timestamp=current.timestamp,
             valid=current.valid & previous.valid,
         )

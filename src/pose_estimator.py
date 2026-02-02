@@ -47,8 +47,9 @@ class PoseEstimator:
         ("left_shoulder", "right_shoulder"),
     ]
 
-    def __init__(self, model_path: str, min_visibility: float = 0.5):
+    def __init__(self, model_path: str, min_visibility: float = 0.3):
         self.min_visibility = min_visibility
+        self._last_valid_result: PoseResult | None = None
         options = vision.PoseLandmarkerOptions(
             base_options=BaseOptions(model_asset_path=model_path),
             num_poses=1,
@@ -85,11 +86,25 @@ class PoseEstimator:
                 for name in self.KEYPOINT_INDICES.values()
             )
 
-        return PoseResult(
+        result = PoseResult(
             keypoints=keypoints,
             is_valid=is_valid,
             timestamp=timestamp,
         )
+
+        if is_valid:
+            self._last_valid_result = result
+            return result
+
+        # Hold last valid pose when detection fails
+        if self._last_valid_result is not None:
+            return PoseResult(
+                keypoints=self._last_valid_result.keypoints,
+                is_valid=True,
+                timestamp=timestamp,
+            )
+
+        return result
 
     def draw(self, image: np.ndarray, pose: PoseResult) -> np.ndarray:
         output = image.copy()

@@ -5,8 +5,8 @@ camera:
   fps: 30
 
 pose:
-  model_path: data/pose_landmarker_lite.task
-  min_visibility: 0.5
+  model_path: data/pose_landmarker_full.task
+  min_visibility: 0.3
 
 angles:
   smoothing_factor: 0.3

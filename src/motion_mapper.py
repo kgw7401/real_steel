@@ -74,6 +74,12 @@ class MotionMapper:
         self.config = config or MappingConfig()
         self.prev_output: np.ndarray | None = None
 
+        # Pre-compute numpy arrays from config dicts for vectorized operations
+        self._scale = np.array([self.config.scale_factors[n] for n in JOINT_ORDER])
+        self._offset = np.array([self.config.offsets[n] for n in JOINT_ORDER])
+        self._limits_low = np.array([self.config.joint_limits[n][0] for n in JOINT_ORDER])
+        self._limits_high = np.array([self.config.joint_limits[n][1] for n in JOINT_ORDER])
+
     def map(self, human_angles: JointAngles) -> ServoAngles:
         # Step 1: Mirror (swap left/right, negate pan)
         if self.config.mirror_mode:
@@ -90,21 +96,17 @@ class MotionMapper:
         else:
             angles = human_angles.to_array()
 
-        # Step 2: Scale + offset
-        for i, name in enumerate(JOINT_ORDER):
-            angles[i] *= self.config.scale_factors[name]
-            angles[i] += self.config.offsets[name]
+        # Step 2: Scale + offset (vectorized)
+        angles *= self._scale
+        angles += self._offset
 
-        # Step 3: Clamp to joint limits
-        for i, name in enumerate(JOINT_ORDER):
-            low, high = self.config.joint_limits[name]
-            angles[i] = np.clip(angles[i], low, high)
+        # Step 3: Clamp to joint limits (vectorized)
+        np.clip(angles, self._limits_low, self._limits_high, out=angles)
 
-        # Step 4: Dead zone — keep previous value if change is small
+        # Step 4: Dead zone — keep previous value if change is small (vectorized)
         if self.prev_output is not None:
-            for i in range(len(angles)):
-                if abs(angles[i] - self.prev_output[i]) < self.config.dead_zone:
-                    angles[i] = self.prev_output[i]
+            mask = np.abs(angles - self.prev_output) < self.config.dead_zone
+            angles[mask] = self.prev_output[mask]
 
         self.prev_output = angles.copy()
         return ServoAngles(angles=angles, timestamp=human_angles.timestamp)
