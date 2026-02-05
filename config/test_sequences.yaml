@@ -1,0 +1,141 @@
+motion_sequences:
+  left_jab:
+    description: "Left jab - quick straight punch"
+    keyframes:
+      - phase: "guard"
+        time_ratio: 0.0
+        angles_deg:
+          l_elbow: 90
+          l_shoulder_tilt: 20
+        tolerance_deg: 12
+
+      - phase: "extend"
+        time_ratio: 0.4
+        angles_deg:
+          l_elbow: 0
+          l_shoulder_tilt: 45
+        tolerance_deg: 10
+
+      - phase: "retract"
+        time_ratio: 1.0
+        angles_deg:
+          l_elbow: 90
+          l_shoulder_tilt: 20
+        tolerance_deg: 12
+
+    trajectory_constraints:
+      - joint: "l_elbow"
+        pattern: "decrease_then_increase"
+      - joint: "l_shoulder_tilt"
+        pattern: "increase_then_decrease"
+
+    timing:
+      duration_range_sec: [0.2, 0.8]
+
+  right_cross:
+    description: "Right cross - power punch across body"
+    keyframes:
+      - phase: "guard"
+        time_ratio: 0.0
+        angles_deg:
+          r_elbow: 90
+          r_shoulder_tilt: 20
+          r_shoulder_pan: 10
+        tolerance_deg: 12
+
+      - phase: "extend"
+        time_ratio: 0.5
+        angles_deg:
+          r_elbow: 0
+          r_shoulder_tilt: 45
+          r_shoulder_pan: -30
+        tolerance_deg: 10
+
+      - phase: "retract"
+        time_ratio: 1.0
+        angles_deg:
+          r_elbow: 90
+          r_shoulder_tilt: 20
+          r_shoulder_pan: 10
+        tolerance_deg: 12
+
+    trajectory_constraints:
+      - joint: "r_elbow"
+        pattern: "decrease_then_increase"
+      - joint: "r_shoulder_pan"
+        pattern: "decrease_then_increase"
+
+    timing:
+      duration_range_sec: [0.3, 1.0]
+
+  left_hook:
+    description: "Left hook - horizontal arc punch"
+    keyframes:
+      - phase: "guard"
+        time_ratio: 0.0
+        angles_deg:
+          l_elbow: 90
+          l_shoulder_pan: 10
+        tolerance_deg: 12
+
+      - phase: "swing"
+        time_ratio: 0.5
+        angles_deg:
+          l_elbow: 90
+          l_shoulder_pan: -60
+        tolerance_deg: 15
+
+      - phase: "retract"
+        time_ratio: 1.0
+        angles_deg:
+          l_elbow: 90
+          l_shoulder_pan: 10
+        tolerance_deg: 12
+
+    trajectory_constraints:
+      - joint: "l_elbow"
+        pattern: "stable"
+        stable_range_deg: 20
+      - joint: "l_shoulder_pan"
+        pattern: "decrease_then_increase"
+
+    timing:
+      duration_range_sec: [0.3, 1.0]
+
+  right_uppercut:
+    description: "Right uppercut - upward punch"
+    keyframes:
+      - phase: "guard"
+        time_ratio: 0.0
+        angles_deg:
+          r_elbow: 90
+          r_shoulder_tilt: 20
+        tolerance_deg: 12
+
+      - phase: "drop"
+        time_ratio: 0.3
+        angles_deg:
+          r_elbow: 100
+          r_shoulder_tilt: 0
+        tolerance_deg: 15
+
+      - phase: "rise"
+        time_ratio: 0.6
+        angles_deg:
+          r_elbow: 70
+          r_shoulder_tilt: 60
+        tolerance_deg: 12
+
+      - phase: "retract"
+        time_ratio: 1.0
+        angles_deg:
+          r_elbow: 90
+          r_shoulder_tilt: 20
+        tolerance_deg: 12
+
+    trajectory_constraints:
+      - joint: "r_shoulder_tilt"
+        pattern: "decrease_then_increase"
+
+    timing:
+      duration_range_sec: [0.4, 1.2]
